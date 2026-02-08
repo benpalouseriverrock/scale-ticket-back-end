@@ -82,17 +82,21 @@ exports.createTicket = async (req, res) => {
 
     const truckResult = await db.query('SELECT tare_weight FROM trucks WHERE truck_id = $1', [truck_id]);
     if (truckResult.rows.length === 0) return res.status(404).json({ error: 'Truck not found' });
-    const truckTare = truckResult.rows[0].tare_weight;
+    const truckTare = parseFloat(truckResult.rows[0].tare_weight) || 0;
 
     let trailerTare = 0;
     if (trailer_id) {
       const trailerResult = await db.query('SELECT tare_weight FROM trailers WHERE trailer_id = $1', [trailer_id]);
       if (trailerResult.rows.length > 0) {
-        trailerTare = trailerResult.rows[0].tare_weight;
+        trailerTare = parseFloat(trailerResult.rows[0].tare_weight) || 0;
       }
     }
 
-    const netWeightLbs = gross_weight - (truckTare + trailerTare);
+    // Convert gross_weight to number
+    const grossWeightLbs = parseFloat(gross_weight);
+    const totalTare = parseFloat(truckTare) + parseFloat(trailerTare);
+    
+    const netWeightLbs = grossWeightLbs - totalTare;
     const netWeightTons = parseFloat((netWeightLbs / 2000).toFixed(2));
 
     const deliveryCharge = (delivery_method && delivery_input_value) 
@@ -104,7 +108,7 @@ exports.createTicket = async (req, res) => {
     const materialCost = parseFloat((netWeightTons * productPrice).toFixed(2));
     const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
     const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
-    const total = parseFloat((subtotal + taxAmount + (cc_fee || 0)).toFixed(2));
+    const total = parseFloat((subtotal + taxAmount + (parseFloat(cc_fee) || 0)).toFixed(2));
 
     const ticketNumber = await getNextTicketNumber();
 
@@ -142,9 +146,9 @@ exports.createTicket = async (req, res) => {
     const values = [
       ticketNumber, customer_id, product_id, truck_id, trailer_id || null,
       job_name || null, delivered_by || null, delivery_unit || null, delivery_location || null,
-      gross_weight, (truckTare + trailerTare), netWeightLbs, netWeightTons,
+      grossWeightLbs, totalTare, netWeightLbs, netWeightTons,
       deliveryCharge, delivery_method || null, delivery_input_value || null,
-      subtotal, taxRate, taxAmount, cc_fee || 0, total,
+      subtotal, taxRate, taxAmount, parseFloat(cc_fee) || 0, total,
       is_wsdot_ticket || false, dot_code || null, contract_number || null, job_number || null,
       mix_id || null, phase_code || null, phase_description || null, dispatch_number || null,
       purchase_order_number || null, weighmaster || null, loadsToday, quantityShippedToday,
