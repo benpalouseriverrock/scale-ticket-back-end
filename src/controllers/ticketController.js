@@ -42,10 +42,10 @@ const getTaxRate = async (customerId) => {
       WHERE c.customer_id = $1 AND tr.active = TRUE LIMIT 1
     `;
     const result = await db.query(query, [customerId]);
-    return result.rows.length > 0 ? result.rows[0].rate_percentage : 7.9;
+    return result.rows.length > 0 ? result.rows[0].rate_percentage : 8.5;
   } catch (error) {
     console.error('Error getting tax rate:', error);
-    return 7.9;
+    return 8.5;
   }
 };
 
@@ -159,6 +159,112 @@ exports.createTicket = async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating ticket:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateTicket = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      customer_id, product_id, truck_id, trailer_id, gross_weight,
+      job_name, delivered_by, delivery_unit, delivery_location,
+      delivery_method, delivery_input_value, cc_fee,
+      is_wsdot_ticket, dot_code, contract_number, job_number, mix_id,
+      phase_code, phase_description, dispatch_number, purchase_order_number,
+      weighmaster, comments
+    } = req.body;
+
+    // Verify ticket exists
+    const existing = await db.query('SELECT * FROM tickets WHERE ticket_id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
+
+    // Use existing values as fallback for recalculation
+    const ticket = existing.rows[0];
+    const effectiveCustomerId = customer_id || ticket.customer_id;
+    const effectiveProductId = product_id || ticket.product_id;
+    const effectiveTruckId = truck_id || ticket.truck_id;
+    const effectiveTrailerId = trailer_id !== undefined ? trailer_id : ticket.trailer_id;
+    const effectiveGrossWeight = gross_weight !== undefined ? parseFloat(gross_weight) : parseFloat(ticket.gross_weight);
+    const effectiveDeliveryMethod = delivery_method !== undefined ? delivery_method : ticket.delivery_method;
+    const effectiveDeliveryInputValue = delivery_input_value !== undefined ? delivery_input_value : ticket.delivery_input_value;
+    const effectiveCcFee = cc_fee !== undefined ? parseFloat(cc_fee) || 0 : parseFloat(ticket.cc_fee) || 0;
+
+    // Lookup product price
+    const prodResult = await db.query('SELECT price_per_ton FROM products WHERE product_id = $1', [effectiveProductId]);
+    if (prodResult.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    const productPrice = prodResult.rows[0].price_per_ton;
+
+    // Lookup truck tare
+    const truckResult = await db.query('SELECT tare_weight FROM trucks WHERE truck_id = $1', [effectiveTruckId]);
+    if (truckResult.rows.length === 0) return res.status(404).json({ error: 'Truck not found' });
+    const truckTare = parseFloat(truckResult.rows[0].tare_weight) || 0;
+
+    // Lookup trailer tare
+    let trailerTare = 0;
+    if (effectiveTrailerId) {
+      const trailerResult = await db.query('SELECT tare_weight FROM trailers WHERE trailer_id = $1', [effectiveTrailerId]);
+      if (trailerResult.rows.length > 0) {
+        trailerTare = parseFloat(trailerResult.rows[0].tare_weight) || 0;
+      }
+    }
+
+    // Recalculate all financial fields
+    const totalTare = truckTare + trailerTare;
+    const netWeightLbs = effectiveGrossWeight - totalTare;
+    const netWeightTons = parseFloat((netWeightLbs / 2000).toFixed(2));
+
+    const deliveryCharge = (effectiveDeliveryMethod && effectiveDeliveryInputValue)
+      ? await calculateDeliveryCharge(effectiveDeliveryMethod, effectiveDeliveryInputValue)
+      : 0;
+
+    const taxRate = await getTaxRate(effectiveCustomerId);
+
+    const materialCost = parseFloat((netWeightTons * productPrice).toFixed(2));
+    const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
+    const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
+    const total = parseFloat((subtotal + taxAmount + effectiveCcFee).toFixed(2));
+
+    const query = `
+      UPDATE tickets SET
+        customer_id = $2, product_id = $3, truck_id = $4, trailer_id = $5,
+        gross_weight = $6, tare_weight = $7, net_weight = $8, net_tons = $9,
+        delivery_charge = $10, delivery_method = $11, delivery_input_value = $12,
+        subtotal = $13, tax_rate = $14, tax_amount = $15, cc_fee = $16, total = $17,
+        job_name = $18, delivered_by = $19, delivery_unit = $20, delivery_location = $21,
+        is_wsdot_ticket = $22, dot_code = $23, contract_number = $24, job_number = $25,
+        mix_id = $26, phase_code = $27, phase_description = $28, dispatch_number = $29,
+        purchase_order_number = $30, weighmaster = $31, comments = $32
+      WHERE ticket_id = $1 RETURNING *
+    `;
+
+    const values = [
+      id,
+      effectiveCustomerId, effectiveProductId, effectiveTruckId, effectiveTrailerId || null,
+      effectiveGrossWeight, totalTare, netWeightLbs, netWeightTons,
+      deliveryCharge, effectiveDeliveryMethod || null, effectiveDeliveryInputValue || null,
+      subtotal, taxRate, taxAmount, effectiveCcFee, total,
+      job_name !== undefined ? job_name : ticket.job_name,
+      delivered_by !== undefined ? delivered_by : ticket.delivered_by,
+      delivery_unit !== undefined ? delivery_unit : ticket.delivery_unit,
+      delivery_location !== undefined ? delivery_location : ticket.delivery_location,
+      is_wsdot_ticket !== undefined ? is_wsdot_ticket : ticket.is_wsdot_ticket,
+      dot_code !== undefined ? dot_code : ticket.dot_code,
+      contract_number !== undefined ? contract_number : ticket.contract_number,
+      job_number !== undefined ? job_number : ticket.job_number,
+      mix_id !== undefined ? mix_id : ticket.mix_id,
+      phase_code !== undefined ? phase_code : ticket.phase_code,
+      phase_description !== undefined ? phase_description : ticket.phase_description,
+      dispatch_number !== undefined ? dispatch_number : ticket.dispatch_number,
+      purchase_order_number !== undefined ? purchase_order_number : ticket.purchase_order_number,
+      weighmaster !== undefined ? weighmaster : ticket.weighmaster,
+      comments !== undefined ? comments : ticket.comments
+    ];
+
+    const result = await db.query(query, values);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating ticket:', error);
     res.status(500).json({ error: error.message });
   }
 };

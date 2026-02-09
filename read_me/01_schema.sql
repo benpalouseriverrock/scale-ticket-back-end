@@ -257,7 +257,9 @@ INSERT INTO products (product_name, supplier_id, price_per_ton, material_categor
 INSERT INTO customers (name, company, address_primary, customer_city, customer_state, customer_zipcode, tax_status) VALUES
 ('Palouse River Rock', 'PRR Operations', '123 Main St', 'Moscow', 'WA', '99847', 'taxable'),
 ('WSDOT Contractor', 'DOT Projects', '456 State Ave', 'Olympia', 'WA', '98501', 'exempt'),
-('General Contractor', 'BuildCo', '789 Oak Ln', 'Spokane', 'WA', '99201', 'taxable');
+('General Contractor', 'BuildCo', '789 Oak Ln', 'Spokane', 'WA', '99201', 'taxable'),
+('Idaho Gravel Works', 'IGW LLC', '321 Pine Rd', 'Boise', 'ID', '83702', 'taxable'),
+('Oregon Paving Co', 'OPC Inc', '555 Cedar Blvd', 'Portland', 'OR', '97201', 'taxable');
 
 -- Trucks
 INSERT INTO trucks (unit_number, configuration, tare_weight, identification_number, active) VALUES
@@ -285,7 +287,7 @@ INSERT INTO trailers (unit_number, configuration, tare_weight, active) VALUES
 
 -- Tax Rates
 INSERT INTO tax_rates (state_code, location, rate_percentage, description) VALUES
-('WA', 'Washington', 7.9, 'Washington State Tax'),
+('WA', 'Washington', 8.5, 'Washington State Tax'),
 ('ID', 'Idaho', 5.0, 'Idaho State Tax'),
 ('OR', 'Oregon', 0.0, 'Oregon No Sales Tax');
 

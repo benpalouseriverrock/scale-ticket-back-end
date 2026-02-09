@@ -337,6 +337,47 @@ const validateCreateTaxRate = [
 ];
 
 // ============================================================================
+// TRAILER VALIDATORS
+// ============================================================================
+
+const validateCreateTrailer = [
+  body('unit_number')
+    .trim()
+    .notEmpty().withMessage('Unit number is required')
+    .isLength({ min: 1, max: 20 }).withMessage('Unit number must be 1-20 characters'),
+
+  body('configuration')
+    .optional()
+    .trim()
+    .isLength({ max: 50 }).withMessage('Configuration must be max 50 characters'),
+
+  body('tare_weight')
+    .notEmpty().withMessage('Tare weight is required')
+    .isInt({ min: 0, max: 30000 }).withMessage('Tare weight must be between 0-30000 lbs')
+];
+
+// ============================================================================
+// SUPPLIER VALIDATORS
+// ============================================================================
+
+const validateCreateSupplier = [
+  body('supplier_name')
+    .trim()
+    .notEmpty().withMessage('Supplier name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Supplier name must be 2-100 characters'),
+
+  body('plant_name')
+    .optional()
+    .trim()
+    .isLength({ max: 100 }).withMessage('Plant name must be max 100 characters'),
+
+  body('contact_info')
+    .optional()
+    .trim()
+    .isLength({ max: 500 }).withMessage('Contact info must be max 500 characters')
+];
+
+// ============================================================================
 // DELIVERY RATE VALIDATORS
 // ============================================================================
 
@@ -399,23 +440,29 @@ module.exports = {
   // Customer validators
   validateCreateCustomer,
   validateUpdateCustomer,
-  
+
   // Product validators
   validateCreateProduct,
-  
+
   // Truck validators
   validateCreateTruck,
   validateUpdateTareWeight,
-  
+
+  // Trailer validators
+  validateCreateTrailer,
+
+  // Supplier validators
+  validateCreateSupplier,
+
   // Ticket validators (CRITICAL)
   validateCreateTicket,
-  
+
   // Tax rate validators
   validateCreateTaxRate,
-  
+
   // Delivery rate validators
   validateCreateDeliveryRate,
-  
+
   // Error handler
   handleValidationErrors
 };
