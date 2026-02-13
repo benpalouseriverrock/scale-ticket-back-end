@@ -1,4 +1,6 @@
 // src/controllers/ticketController.js
+// ✅ UPDATED: Now handles split weight entry (truck_weight + pup_weight)
+
 const db = require('../config/database');
 
 const calculateDeliveryCharge = async (method, inputValue) => {
@@ -42,10 +44,10 @@ const getTaxRate = async (customerId) => {
       WHERE c.customer_id = $1 AND tr.active = TRUE LIMIT 1
     `;
     const result = await db.query(query, [customerId]);
-    return result.rows.length > 0 ? result.rows[0].rate_percentage : 8.5;
+    return result.rows.length > 0 ? result.rows[0].rate_percentage : 7.9;
   } catch (error) {
     console.error('Error getting tax rate:', error);
-    return 8.5;
+    return 7.9;
   }
 };
 
@@ -61,29 +63,61 @@ const getNextTicketNumber = async () => {
   }
 };
 
+// ============================================================================
+// CREATE TICKET - Updated to handle split weight entry
+// ============================================================================
 exports.createTicket = async (req, res) => {
   try {
     const {
-      customer_id, product_id, truck_id, trailer_id, gross_weight,
+      customer_id, product_id, truck_id, trailer_id,
+      truck_weight,      // ✅ NEW: User enters truck weight
+      pup_weight,        // ✅ NEW: User enters pup/trailer weight
+      gross_weight,      // ✅ Should be truck_weight + pup_weight from frontend
       job_name, delivered_by, delivery_unit, delivery_location,
       delivery_method, delivery_input_value, cc_fee,
       is_wsdot_ticket, dot_code, contract_number, job_number, mix_id,
       phase_code, phase_description, dispatch_number, purchase_order_number,
-      weighmaster, comments
+      weighmaster, comments,
+      manual_tare_override
     } = req.body;
 
-    if (!customer_id || !product_id || !truck_id || !gross_weight) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // ✅ VALIDATION: Check required fields
+    if (!customer_id || !product_id || !truck_id) {
+      return res.status(400).json({ error: 'Missing required fields: customer, product, truck' });
     }
 
-    const prodResult = await db.query('SELECT price_per_ton FROM products WHERE product_id = $1', [product_id]);
+    // ✅ VALIDATION: Check weight fields
+    if (!truck_weight || truck_weight <= 0) {
+      return res.status(400).json({ error: 'Truck weight is required and must be greater than 0' });
+    }
+
+    // ✅ STEP 1: Calculate gross weight from split weights
+    const truckWeightLbs = parseFloat(truck_weight) || 0;
+    const pupWeightLbs = parseFloat(pup_weight) || 0;
+    const grossWeightLbs = truckWeightLbs + pupWeightLbs;
+
+    console.log('Weight Entry:', {
+      truck_weight: truckWeightLbs,
+      pup_weight: pupWeightLbs,
+      gross_weight_calculated: grossWeightLbs,
+      gross_weight_from_frontend: gross_weight
+    });
+
+    // Get product info
+    const prodResult = await db.query(
+      'SELECT price_per_ton, product_name FROM products WHERE product_id = $1', 
+      [product_id]
+    );
     if (prodResult.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const productPrice = prodResult.rows[0].price_per_ton;
+    const productName = prodResult.rows[0].product_name;
 
+    // Get truck tare
     const truckResult = await db.query('SELECT tare_weight FROM trucks WHERE truck_id = $1', [truck_id]);
     if (truckResult.rows.length === 0) return res.status(404).json({ error: 'Truck not found' });
     const truckTare = parseFloat(truckResult.rows[0].tare_weight) || 0;
 
+    // Get trailer tare
     let trailerTare = 0;
     if (trailer_id) {
       const trailerResult = await db.query('SELECT tare_weight FROM trailers WHERE trailer_id = $1', [trailer_id]);
@@ -92,26 +126,38 @@ exports.createTicket = async (req, res) => {
       }
     }
 
-    // Convert gross_weight to number
-    const grossWeightLbs = parseFloat(gross_weight);
-    const totalTare = parseFloat(truckTare) + parseFloat(trailerTare);
+    // ✅ STEP 2: Calculate tare (with manual override option)
+    const totalTare = (manual_tare_override && manual_tare_override > 0) ? 
+                      parseFloat(manual_tare_override) : 
+                      parseFloat(truckTare) + parseFloat(trailerTare);
     
+    // ✅ STEP 3: Calculate net weight
     const netWeightLbs = grossWeightLbs - totalTare;
     const netWeightTons = parseFloat((netWeightLbs / 2000).toFixed(2));
 
+    // ✅ STEP 4: Calculate material cost (with Pickup Load special handling)
+    const isPickupLoad = (productName === 'Pickup Load');
+    const materialCost = isPickupLoad ? 
+                        parseFloat(productPrice.toFixed(2)) : 
+                        parseFloat((netWeightTons * productPrice).toFixed(2));
+
+    // ✅ STEP 5: Calculate delivery charge
     const deliveryCharge = (delivery_method && delivery_input_value) 
       ? await calculateDeliveryCharge(delivery_method, delivery_input_value) 
       : 0;
 
+    // ✅ STEP 6: Calculate tax
     const taxRate = await getTaxRate(customer_id);
-
-    const materialCost = parseFloat((netWeightTons * productPrice).toFixed(2));
     const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
     const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
+    
+    // ✅ STEP 7: Calculate total
     const total = parseFloat((subtotal + taxAmount + (parseFloat(cc_fee) || 0)).toFixed(2));
 
+    // ✅ STEP 8: Generate ticket number
     const ticketNumber = await getNextTicketNumber();
 
+    // Handle WSDOT ticket data
     let loadsToday = null;
     let quantityShippedToday = null;
     if (is_wsdot_ticket) {
@@ -126,27 +172,28 @@ exports.createTicket = async (req, res) => {
       }
     }
 
+    // ✅ STEP 9: Insert ticket with split weight fields
     const query = `
       INSERT INTO tickets (
         ticket_number, date_time, customer_id, product_id, truck_id, trailer_id,
         job_name, delivered_by, delivery_unit, delivery_location,
-        gross_weight, tare_weight, net_weight, net_tons,
+        truck_weight, pup_weight, gross_weight, tare_weight, net_weight, net_tons,
         delivery_charge, delivery_method, delivery_input_value,
         subtotal, tax_rate, tax_amount, cc_fee, total,
         is_wsdot_ticket, dot_code, contract_number, job_number, mix_id, phase_code,
         phase_description, dispatch_number, purchase_order_number, weighmaster,
         loads_today, quantity_shipped_today, comments
       ) VALUES (
-        $1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
-        $33, $34
+        $1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
+        $30, $31, $32, $33, $34, $35, $36
       ) RETURNING *
     `;
 
     const values = [
       ticketNumber, customer_id, product_id, truck_id, trailer_id || null,
       job_name || null, delivered_by || null, delivery_unit || null, delivery_location || null,
-      grossWeightLbs, totalTare, netWeightLbs, netWeightTons,
+      truckWeightLbs, pupWeightLbs, grossWeightLbs, totalTare, netWeightLbs, netWeightTons,
       deliveryCharge, delivery_method || null, delivery_input_value || null,
       subtotal, taxRate, taxAmount, parseFloat(cc_fee) || 0, total,
       is_wsdot_ticket || false, dot_code || null, contract_number || null, job_number || null,
@@ -163,44 +210,55 @@ exports.createTicket = async (req, res) => {
   }
 };
 
+// ============================================================================
+// UPDATE TICKET - Updated to handle split weight entry
+// ============================================================================
 exports.updateTicket = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      customer_id, product_id, truck_id, trailer_id, gross_weight,
+      customer_id, product_id, truck_id, trailer_id,
+      truck_weight,      // ✅ NEW: User enters truck weight
+      pup_weight,        // ✅ NEW: User enters pup/trailer weight
+      gross_weight,      // ✅ Should be truck_weight + pup_weight
       job_name, delivered_by, delivery_unit, delivery_location,
       delivery_method, delivery_input_value, cc_fee,
       is_wsdot_ticket, dot_code, contract_number, job_number, mix_id,
       phase_code, phase_description, dispatch_number, purchase_order_number,
-      weighmaster, comments
+      weighmaster, comments,
+      manual_tare_override
     } = req.body;
 
     // Verify ticket exists
     const existing = await db.query('SELECT * FROM tickets WHERE ticket_id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
 
-    // Use existing values as fallback for recalculation
     const ticket = existing.rows[0];
     const effectiveCustomerId = customer_id || ticket.customer_id;
     const effectiveProductId = product_id || ticket.product_id;
     const effectiveTruckId = truck_id || ticket.truck_id;
     const effectiveTrailerId = trailer_id !== undefined ? trailer_id : ticket.trailer_id;
-    const effectiveGrossWeight = gross_weight !== undefined ? parseFloat(gross_weight) : parseFloat(ticket.gross_weight);
-    const effectiveDeliveryMethod = delivery_method !== undefined ? delivery_method : ticket.delivery_method;
-    const effectiveDeliveryInputValue = delivery_input_value !== undefined ? delivery_input_value : ticket.delivery_input_value;
-    const effectiveCcFee = cc_fee !== undefined ? parseFloat(cc_fee) || 0 : parseFloat(ticket.cc_fee) || 0;
 
-    // Lookup product price
-    const prodResult = await db.query('SELECT price_per_ton FROM products WHERE product_id = $1', [effectiveProductId]);
+    // ✅ Calculate gross from split weights (use provided values or existing)
+    const truckWeightLbs = truck_weight !== undefined ? parseFloat(truck_weight) : parseFloat(ticket.truck_weight);
+    const pupWeightLbs = pup_weight !== undefined ? parseFloat(pup_weight) : parseFloat(ticket.pup_weight);
+    const grossWeightLbs = truckWeightLbs + pupWeightLbs;
+
+    // Get product info
+    const prodResult = await db.query(
+      'SELECT price_per_ton, product_name FROM products WHERE product_id = $1',
+      [effectiveProductId]
+    );
     if (prodResult.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const productPrice = prodResult.rows[0].price_per_ton;
+    const productName = prodResult.rows[0].product_name;
 
-    // Lookup truck tare
+    // Get truck tare
     const truckResult = await db.query('SELECT tare_weight FROM trucks WHERE truck_id = $1', [effectiveTruckId]);
     if (truckResult.rows.length === 0) return res.status(404).json({ error: 'Truck not found' });
     const truckTare = parseFloat(truckResult.rows[0].tare_weight) || 0;
 
-    // Lookup trailer tare
+    // Get trailer tare
     let trailerTare = 0;
     if (effectiveTrailerId) {
       const trailerResult = await db.query('SELECT tare_weight FROM trailers WHERE trailer_id = $1', [effectiveTrailerId]);
@@ -209,39 +267,57 @@ exports.updateTicket = async (req, res) => {
       }
     }
 
-    // Recalculate all financial fields
-    const totalTare = truckTare + trailerTare;
-    const netWeightLbs = effectiveGrossWeight - totalTare;
+    // Calculate tare (with manual override)
+    const totalTare = (manual_tare_override && manual_tare_override > 0) ?
+                      parseFloat(manual_tare_override) :
+                      truckTare + trailerTare;
+
+    // Calculate net weight
+    const netWeightLbs = grossWeightLbs - totalTare;
     const netWeightTons = parseFloat((netWeightLbs / 2000).toFixed(2));
 
+    // Calculate material cost (with Pickup Load special handling)
+    const isPickupLoad = (productName === 'Pickup Load');
+    const materialCost = isPickupLoad ?
+                        parseFloat(productPrice.toFixed(2)) :
+                        parseFloat((netWeightTons * productPrice).toFixed(2));
+
+    // Calculate delivery charge
+    const effectiveDeliveryMethod = delivery_method !== undefined ? delivery_method : ticket.delivery_method;
+    const effectiveDeliveryInputValue = delivery_input_value !== undefined ? delivery_input_value : ticket.delivery_input_value;
     const deliveryCharge = (effectiveDeliveryMethod && effectiveDeliveryInputValue)
       ? await calculateDeliveryCharge(effectiveDeliveryMethod, effectiveDeliveryInputValue)
       : 0;
 
+    // Calculate tax
     const taxRate = await getTaxRate(effectiveCustomerId);
-
-    const materialCost = parseFloat((netWeightTons * productPrice).toFixed(2));
     const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
     const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
+
+    // Calculate total
+    const effectiveCcFee = cc_fee !== undefined ? parseFloat(cc_fee) || 0 : parseFloat(ticket.cc_fee) || 0;
     const total = parseFloat((subtotal + taxAmount + effectiveCcFee).toFixed(2));
 
+    // Update ticket
     const query = `
       UPDATE tickets SET
         customer_id = $2, product_id = $3, truck_id = $4, trailer_id = $5,
-        gross_weight = $6, tare_weight = $7, net_weight = $8, net_tons = $9,
-        delivery_charge = $10, delivery_method = $11, delivery_input_value = $12,
-        subtotal = $13, tax_rate = $14, tax_amount = $15, cc_fee = $16, total = $17,
-        job_name = $18, delivered_by = $19, delivery_unit = $20, delivery_location = $21,
-        is_wsdot_ticket = $22, dot_code = $23, contract_number = $24, job_number = $25,
-        mix_id = $26, phase_code = $27, phase_description = $28, dispatch_number = $29,
-        purchase_order_number = $30, weighmaster = $31, comments = $32
+        truck_weight = $6, pup_weight = $7, gross_weight = $8,
+        tare_weight = $9, net_weight = $10, net_tons = $11,
+        delivery_charge = $12, delivery_method = $13, delivery_input_value = $14,
+        subtotal = $15, tax_rate = $16, tax_amount = $17, cc_fee = $18, total = $19,
+        job_name = $20, delivered_by = $21, delivery_unit = $22, delivery_location = $23,
+        is_wsdot_ticket = $24, dot_code = $25, contract_number = $26, job_number = $27,
+        mix_id = $28, phase_code = $29, phase_description = $30, dispatch_number = $31,
+        purchase_order_number = $32, weighmaster = $33, comments = $34
       WHERE ticket_id = $1 RETURNING *
     `;
 
     const values = [
       id,
       effectiveCustomerId, effectiveProductId, effectiveTruckId, effectiveTrailerId || null,
-      effectiveGrossWeight, totalTare, netWeightLbs, netWeightTons,
+      truckWeightLbs, pupWeightLbs, grossWeightLbs,
+      totalTare, netWeightLbs, netWeightTons,
       deliveryCharge, effectiveDeliveryMethod || null, effectiveDeliveryInputValue || null,
       subtotal, taxRate, taxAmount, effectiveCcFee, total,
       job_name !== undefined ? job_name : ticket.job_name,
@@ -269,6 +345,9 @@ exports.updateTicket = async (req, res) => {
   }
 };
 
+// ============================================================================
+// Other exports (getAll, getById, delete, etc.)
+// ============================================================================
 exports.getAllTickets = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
