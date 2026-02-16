@@ -227,9 +227,7 @@ const validateCreateTicket = [
       
       // Validate delivery method has matching rate
       const method = req.body.delivery_method;
-      const query = method === 'location' 
-        ? 'SELECT rate_id FROM delivery_rates WHERE method = $1 AND delivery_location = $2'
-        : 'SELECT rate_id FROM delivery_rates WHERE method = $1 AND mileage_range = $2';
+      const query = 'SELECT delivery_rate_id FROM delivery_rates WHERE method = $1 AND input_value = $2';
       
       const result = await db.query(query, [method, value]);
       if (result.rows.length === 0) {

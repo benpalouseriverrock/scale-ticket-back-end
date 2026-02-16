@@ -3,33 +3,42 @@
 
 const db = require('../config/database');
 
-const calculateDeliveryCharge = async (method, inputValue) => {
+const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
   try {
-    let query, params;
+    // ⭐ CORRECTED: Both methods query flat_rate column (rate_per_mile is NULL in database!)
+    const query = `
+      SELECT flat_rate, minimum_charge 
+      FROM delivery_rates 
+      WHERE method = $1 AND input_value = $2 AND active = TRUE 
+      LIMIT 1
+    `;
+    
+    const result = await db.query(query, [method, inputValue]);
+    if (result.rows.length === 0) return 0;
+    
+    const row = result.rows[0];
+    let charge = 0;
     
     if (method === 'location') {
-      query = `SELECT flat_rate, minimum_charge FROM delivery_rates 
-               WHERE method = $1 AND input_value = $2 AND active = TRUE LIMIT 1`;
-      params = ['location', inputValue];
+      // ⭐ CRITICAL: flat_rate contains $/ton rate - MUST multiply by tons!
+      // Example: Colfax = $6.5/ton, for 10 tons = 10 × $6.5 = $65
+      charge = (row.flat_rate || 0) * tons;
+      
     } else if (method === 'mileage') {
-      query = `SELECT rate_per_mile, minimum_charge FROM delivery_rates 
-               WHERE method = $1 AND input_value = $2 AND active = TRUE LIMIT 1`;
-      params = ['mileage', inputValue];
+      // ⭐ CRITICAL: flat_rate contains rate for this mileage range - use directly
+      // Example: 11-15 miles = $3.25 (don't multiply by tons)
+      charge = row.flat_rate || 0;
     } else {
       return 0;
     }
     
-    const result = await db.query(query, params);
-    if (result.rows.length === 0) return 0;
-    
-    const row = result.rows[0];
-    let charge = method === 'location' ? row.flat_rate : row.rate_per_mile;
-    
+    // Apply minimum charge if applicable
     if (row.minimum_charge && charge < row.minimum_charge) {
       charge = row.minimum_charge;
     }
     
-    return parseFloat((charge || 0).toFixed(2));
+    return parseFloat(charge.toFixed(2));
+    
   } catch (error) {
     console.error('Error calculating delivery charge:', error);
     return 0;
@@ -141,9 +150,9 @@ exports.createTicket = async (req, res) => {
                         parseFloat(productPrice.toFixed(2)) : 
                         parseFloat((netWeightTons * productPrice).toFixed(2));
 
-    // ✅ STEP 5: Calculate delivery charge
+    // ✅ STEP 5: Calculate delivery charge (PASS TONS for location-based!)
     const deliveryCharge = (delivery_method && delivery_input_value) 
-      ? await calculateDeliveryCharge(delivery_method, delivery_input_value) 
+      ? await calculateDeliveryCharge(delivery_method, delivery_input_value, netWeightTons) 
       : 0;
 
     // ✅ STEP 6: Calculate tax
@@ -282,11 +291,11 @@ exports.updateTicket = async (req, res) => {
                         parseFloat(productPrice.toFixed(2)) :
                         parseFloat((netWeightTons * productPrice).toFixed(2));
 
-    // Calculate delivery charge
+    // Calculate delivery charge (PASS TONS for location-based!)
     const effectiveDeliveryMethod = delivery_method !== undefined ? delivery_method : ticket.delivery_method;
     const effectiveDeliveryInputValue = delivery_input_value !== undefined ? delivery_input_value : ticket.delivery_input_value;
     const deliveryCharge = (effectiveDeliveryMethod && effectiveDeliveryInputValue)
-      ? await calculateDeliveryCharge(effectiveDeliveryMethod, effectiveDeliveryInputValue)
+      ? await calculateDeliveryCharge(effectiveDeliveryMethod, effectiveDeliveryInputValue, netWeightTons)
       : 0;
 
     // Calculate tax
