@@ -2,6 +2,7 @@
 // ✅ UPDATED: Now handles split weight entry (truck_weight + pup_weight)
 
 const db = require('../config/database');
+const haulhubService = require('../services/haulhubService');
 
 const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
   try {
@@ -69,6 +70,70 @@ const getNextTicketNumber = async () => {
     return String(result.rows[0].next_num).padStart(6, '0');
   } catch (error) {
     return String(Math.floor(Math.random() * 999999)).padStart(6, '0');
+  }
+};
+
+/**
+ * Push a ticket to HaulHub and record the result in the database.
+ * Fetches related customer, product, supplier, and truck data to build the payload.
+ */
+const pushTicketToHaulHub = async (ticket) => {
+  try {
+    // Fetch related records needed for the HaulHub payload
+    const [customerRes, productRes, truckRes] = await Promise.all([
+      db.query(
+        `SELECT c.*, s.supplier_name, s.plant_name, s.supplier_id
+         FROM customers c
+         LEFT JOIN products p ON p.product_id = $2
+         LEFT JOIN suppliers s ON s.supplier_id = p.supplier_id
+         WHERE c.customer_id = $1`,
+        [ticket.customer_id, ticket.product_id]
+      ),
+      db.query('SELECT * FROM products WHERE product_id = $1', [ticket.product_id]),
+      db.query('SELECT * FROM trucks WHERE truck_id = $1', [ticket.truck_id]),
+    ]);
+
+    const customer = customerRes.rows[0] || {};
+    const product = productRes.rows[0] || {};
+    const supplier = {
+      supplier_id: customer.supplier_id,
+      supplier_name: customer.supplier_name,
+      plant_name: customer.plant_name,
+    };
+    const truck = truckRes.rows[0] || null;
+
+    const payload = haulhubService.buildHaulHubPayload(ticket, customer, product, supplier, truck);
+
+    console.log('HaulHub payload:', JSON.stringify(payload, null, 2));
+
+    const response = await haulhubService.postToHaulHub(payload);
+
+    console.log('HaulHub response:', response.statusCode, JSON.stringify(response.body));
+
+    // Record the response in the database
+    await db.query(
+      `UPDATE tickets
+       SET haulhub_pushed_at = NOW(),
+           haulhub_response = $2,
+           haulhub_status_code = $3
+       WHERE ticket_id = $1`,
+      [ticket.ticket_id, JSON.stringify(response.body), response.statusCode]
+    );
+
+    return response;
+  } catch (error) {
+    console.error('HaulHub push failed for ticket', ticket.ticket_id, ':', error.message);
+
+    // Record the failure
+    await db.query(
+      `UPDATE tickets
+       SET haulhub_response = $2,
+           haulhub_status_code = $3
+       WHERE ticket_id = $1`,
+      [ticket.ticket_id, JSON.stringify({ error: error.message }), 0]
+    ).catch(() => {});
+
+    return { statusCode: 0, body: { error: error.message } };
   }
 };
 
@@ -212,7 +277,28 @@ exports.createTicket = async (req, res) => {
     ];
 
     const result = await db.query(query, values);
-    res.status(201).json(result.rows[0]);
+    const createdTicket = result.rows[0];
+
+    // Push to HaulHub if integration is enabled and this is a WSDOT ticket
+    let haulhubResult = null;
+    if (is_wsdot_ticket && haulhubService.isEnabled()) {
+      haulhubResult = await pushTicketToHaulHub(createdTicket);
+
+      // Re-fetch the ticket to include haulhub fields in the response
+      const refreshed = await db.query('SELECT * FROM tickets WHERE ticket_id = $1', [createdTicket.ticket_id]);
+      if (refreshed.rows.length > 0) {
+        return res.status(201).json({
+          ...refreshed.rows[0],
+          haulhub_push: {
+            attempted: true,
+            status_code: haulhubResult.statusCode,
+            success: haulhubResult.statusCode === 201 || haulhubResult.statusCode === 200,
+          },
+        });
+      }
+    }
+
+    res.status(201).json(createdTicket);
   } catch (error) {
     console.error('Error creating ticket:', error);
     res.status(500).json({ error: error.message });
@@ -432,21 +518,29 @@ exports.markPrinted = async (req, res) => {
 exports.pushToHaulHub = async (req, res) => {
   try {
     const { id } = req.params;
-    const ticketQuery = `SELECT t.*, c.name as customer_name FROM tickets t
-                         JOIN customers c ON t.customer_id = c.customer_id
-                         WHERE t.ticket_id = $1 AND t.is_wsdot_ticket = TRUE`;
 
+    if (!haulhubService.isEnabled()) {
+      return res.status(400).json({ error: 'HaulHub integration is not enabled. Set HAULHUB_ENABLED=true and provide a valid HAULHUB_API_TOKEN.' });
+    }
+
+    const ticketQuery = `SELECT t.* FROM tickets t WHERE t.ticket_id = $1 AND t.is_wsdot_ticket = TRUE`;
     const ticketResult = await db.query(ticketQuery, [id]);
-    if (ticketResult.rows.length === 0) return res.status(404).json({ error: 'WSDOT ticket not found' });
+    if (ticketResult.rows.length === 0) {
+      return res.status(404).json({ error: 'WSDOT ticket not found' });
+    }
 
     const ticket = ticketResult.rows[0];
-    const haulhubResponse = { status: 'success', ticket_number: ticket.ticket_number };
+    const response = await pushTicketToHaulHub(ticket);
 
-    const updateQuery = `UPDATE tickets SET haulhub_pushed_at = NOW(), haulhub_response = $2, haulhub_status_code = 200
-                         WHERE ticket_id = $1 RETURNING *`;
-    const updateResult = await db.query(updateQuery, [id, JSON.stringify(haulhubResponse)]);
+    // Re-fetch to get the updated haulhub fields
+    const refreshed = await db.query('SELECT * FROM tickets WHERE ticket_id = $1', [id]);
 
-    res.json({ message: 'Ticket marked for HaulHub', ticket: updateResult.rows[0] });
+    res.json({
+      message: response.statusCode === 201 ? 'Ticket submitted to HaulHub' : 'HaulHub responded',
+      haulhub_status: response.statusCode,
+      haulhub_response: response.body,
+      ticket: refreshed.rows[0],
+    });
   } catch (error) {
     console.error('Error pushing to HaulHub:', error);
     res.status(500).json({ error: error.message });

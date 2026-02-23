@@ -228,7 +228,7 @@ const validateCreateTicket = [
       // Validate delivery method has matching rate
       const method = req.body.delivery_method;
       const query = 'SELECT delivery_rate_id FROM delivery_rates WHERE method = $1 AND input_value = $2';
-      
+
       const result = await db.query(query, [method, value]);
       if (result.rows.length === 0) {
         throw new Error(`Delivery ${method} "${value}" does not exist in rates`);
