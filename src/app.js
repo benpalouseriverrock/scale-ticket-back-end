@@ -5,8 +5,18 @@ require('dotenv').config();
 
 const app = express();
 
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
+  .split(',')
+  .map(o => o.trim());
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:4200'
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  }
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -23,7 +33,6 @@ app.use('/api/trailers', require('./routes/trailers'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/tax-rates', require('./routes/taxRates'));
 app.use('/api/delivery-rates', require('./routes/deliveryRates'));
-app.use('/api/wsdot-projects', require('./routes/wsdotProjects'));
 
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -38,7 +47,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Scale Ticket API running on port ${PORT}`);
   console.log(`📍 Database: ${process.env.DB_NAME || 'scale_tickets'}`);
-  console.log(`🌐 CORS: ${process.env.CORS_ORIGIN || 'http://localhost:4200'}`);
+  console.log(`🌐 CORS: ${allowedOrigins.join(', ')}`);
 });
 
 module.exports = app;
