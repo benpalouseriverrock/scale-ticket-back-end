@@ -58,7 +58,7 @@ function buildHaulHubPayload(ticket, customer, product, supplier, truck) {
         // Job / contract info
         comments: ticket.comments || '',
         contract_number: ticket.contract_number || '',
-        job: ticket.job_name || '',
+        job: ticket.job_name || ticket.job_number || '',
         job_number: ticket.job_number || '',
         dispatch_number: ticket.dispatch_number || '',
         purchase_order_number: ticket.purchase_order_number || '',
@@ -69,7 +69,7 @@ function buildHaulHubPayload(ticket, customer, product, supplier, truck) {
         material_category: product.material_category || '',
         material_number: product.product_code || String(product.product_id),
         mix_id: ticket.mix_id || product.mix_id || '',
-        product_code: product.product_code || '',
+        product_code: product.product_code || String(product.product_id),
         phase_code: ticket.phase_code || '',
         phase_description: ticket.phase_description || '',
 
