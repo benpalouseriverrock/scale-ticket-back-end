@@ -33,6 +33,7 @@ app.use('/api/trailers', require('./routes/trailers'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/tax-rates', require('./routes/taxRates'));
 app.use('/api/delivery-rates', require('./routes/deliveryRates'));
+app.use('/api/wsdot-projects', require('./routes/wsdotProjects'));
 
 app.use((err, req, res, next) => {
   console.error('Error:', err);
