@@ -1,0 +1,488 @@
+{
+  "info": {
+    "name": "Scale Ticket System API",
+    "description": "Complete API testing collection for Scale Ticket Management System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "GET All Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/customers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "customers"]
+            },
+            "description": "Get all customers from the system"
+          }
+        },
+        {
+          "name": "GET Customer by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/customers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "customers", "1"]
+            },
+            "description": "Get specific customer (ID 1)"
+          }
+        },
+        {
+          "name": "POST Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Customer\",\n  \"company\": \"Test Company\",\n  \"contact_first\": \"John\",\n  \"contact_last\": \"Doe\",\n  \"address_primary\": \"123 Main St\",\n  \"customer_city\": \"Seattle\",\n  \"customer_state\": \"WA\",\n  \"customer_zipcode\": \"98101\",\n  \"tax_status\": \"taxable\",\n  \"phone\": \"206-555-0123\",\n  \"email\": \"test@example.com\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/customers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "customers"]
+            },
+            "description": "Create new customer"
+          }
+        },
+        {
+          "name": "PUT Update Customer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Customer\",\n  \"company\": \"Updated Company\",\n  \"customer_state\": \"ID\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/customers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "customers", "1"]
+            },
+            "description": "Update customer (ID 1)"
+          }
+        },
+        {
+          "name": "DELETE Customer",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/customers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "customers", "1"]
+            },
+            "description": "Delete customer (ID 1)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "GET All Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/products",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "products"]
+            }
+          }
+        },
+        {
+          "name": "GET Product by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/products/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "products", "1"]
+            }
+          }
+        },
+        {
+          "name": "POST Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_name\": \"Test Material\",\n  \"supplier_id\": 1,\n  \"price_per_ton\": 7.50,\n  \"material_category\": \"Test\",\n  \"product_code\": \"TEST001\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/products",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "products"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trucks",
+      "item": [
+        {
+          "name": "GET All Trucks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/trucks",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trucks"]
+            }
+          }
+        },
+        {
+          "name": "GET Truck by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/trucks/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trucks", "1"]
+            }
+          }
+        },
+        {
+          "name": "POST Create Truck",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unit_number\": \"TEST-TRUCK\",\n  \"configuration\": \"Test Config\",\n  \"tare_weight\": 28000\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/trucks",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trucks"]
+            }
+          }
+        },
+        {
+          "name": "POST Update Tare Weight",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tare_weight\": 29000\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/trucks/1/tare",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trucks", "1", "tare"]
+            },
+            "description": "Update tare weight for truck ID 1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trailers",
+      "item": [
+        {
+          "name": "GET All Trailers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/trailers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trailers"]
+            }
+          }
+        },
+        {
+          "name": "GET Trailer by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/trailers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "trailers", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tax Rates",
+      "item": [
+        {
+          "name": "GET All Tax Rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/tax-rates",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tax-rates"]
+            }
+          }
+        },
+        {
+          "name": "GET Tax Rate by State",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/tax-rates/state/WA",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tax-rates", "state", "WA"]
+            },
+            "description": "Get tax rate for Washington state"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delivery Rates",
+      "item": [
+        {
+          "name": "GET All Delivery Rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/delivery-rates",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "delivery-rates"]
+            }
+          }
+        },
+        {
+          "name": "GET Location-Based Rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/delivery-rates/method/location",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "delivery-rates", "method", "location"]
+            }
+          }
+        },
+        {
+          "name": "GET Mileage-Based Rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/delivery-rates/method/mileage",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "delivery-rates", "method", "mileage"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets - CRITICAL TESTS",
+      "item": [
+        {
+          "name": "GET All Tickets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/tickets",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets"]
+            },
+            "description": "Get all tickets created"
+          }
+        },
+        {
+          "name": "TEST 1: Create Ticket - Location Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": 1,\n  \"product_id\": 1,\n  \"truck_id\": 1,\n  \"trailer_id\": 1,\n  \"gross_weight\": 70000,\n  \"delivery_method\": \"location\",\n  \"delivery_input_value\": \"Colfax\",\n  \"delivered_by\": \"Bob\",\n  \"job_name\": \"Test Job 1\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/tickets",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets"]
+            },
+            "description": "CRITICAL: Test weight calculations\nGross: 70000\nTruck Tare: 30240\nTrailer Tare: 8000\nExpected Net: 31760\nExpected Tons: 15.88\nExpected Delivery: $10.00\nExpected Tax: ~$7.69 (7.9%)\nExpected Total: ~$105.03"
+          }
+        },
+        {
+          "name": "TEST 2: Create Ticket - Mileage Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": 2,\n  \"product_id\": 2,\n  \"truck_id\": 2,\n  \"trailer_id\": 2,\n  \"gross_weight\": 65000,\n  \"delivery_method\": \"mileage\",\n  \"delivery_input_value\": \"5-10\",\n  \"delivered_by\": \"John\",\n  \"job_name\": \"Test Job 2\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/tickets",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets"]
+            },
+            "description": "CRITICAL: Test mileage-based delivery\nGross: 65000\nTruck Tare: 28000\nTrailer Tare: 8000\nExpected Net: 29000\nExpected Tons: 14.5\nDelivery: mileage rate × 14.5 tons"
+          }
+        },
+        {
+          "name": "TEST 3: Create WSDOT Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": 3,\n  \"product_id\": 3,\n  \"truck_id\": 3,\n  \"trailer_id\": 3,\n  \"gross_weight\": 72000,\n  \"delivery_method\": \"location\",\n  \"delivery_input_value\": \"Almota\",\n  \"delivered_by\": \"Mike\",\n  \"is_wsdot_ticket\": true,\n  \"dot_code\": \"XE3502 SR 104\",\n  \"job_number\": \"J001\",\n  \"contract_number\": \"XE3502\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/tickets",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets"]
+            },
+            "description": "Test WSDOT ticket creation with extra fields"
+          }
+        },
+        {
+          "name": "TEST 4: Create Ticket Different State",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": 2,\n  \"product_id\": 2,\n  \"truck_id\": 4,\n  \"trailer_id\": 4,\n  \"gross_weight\": 60000,\n  \"delivery_method\": \"location\",\n  \"delivery_input_value\": \"Boise\",\n  \"delivered_by\": \"Sarah\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/tickets",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets"]
+            },
+            "description": "Test different state tax rate (ID = 5.0%)\nCustomer 2 is in Idaho"
+          }
+        },
+        {
+          "name": "GET Specific Ticket",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/tickets/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "tickets", "1"]
+            },
+            "description": "Get details of ticket ID 1 to verify calculations"
+          }
+        }
+      ]
+    }
+  ]
+}

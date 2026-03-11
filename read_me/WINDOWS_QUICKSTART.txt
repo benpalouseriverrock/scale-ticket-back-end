@@ -1,0 +1,196 @@
+================================================================================
+                  PHASE 1 - SCALE TICKET SYSTEM
+                     WINDOWS SETUP QUICK START
+================================================================================
+
+🎯 YOU HAVE EVERYTHING READY - Just 5 Minutes to Get Running!
+
+================================================================================
+                          BEFORE YOU START
+================================================================================
+
+Make sure you have installed:
+☑ PostgreSQL - https://www.postgresql.org/download/windows/
+☑ Node.js - https://nodejs.org/ (LTS version)
+☑ Git (optional) - https://git-scm.com/download/win
+
+Verify in PowerShell:
+  node --version
+  npm --version
+  psql --version
+
+If any fail, install that software first.
+
+================================================================================
+                      STEP 1: CREATE DATABASE (2 min)
+================================================================================
+
+OPTION A: Using pgAdmin (Easiest)
+  1. Open pgAdmin 4 (installed with PostgreSQL)
+  2. Right-click "Databases" → Create → Database
+  3. Name: scale_tickets
+  4. Click Save
+  5. Right-click scale_tickets → Query Tool
+  6. Copy entire contents of: 01_schema.sql
+  7. Paste into Query Tool
+  8. Click Execute (▶ button)
+
+OPTION B: Using PowerShell
+  1. Open PowerShell as Administrator
+  2. Run: psql -U postgres
+  3. Paste this:
+     CREATE DATABASE scale_tickets;
+     \c scale_tickets
+     (Then copy entire 01_schema.sql and paste)
+  4. Run: \dt
+     (Should list 7 tables)
+  5. Run: \q (exit)
+
+✅ Database created!
+
+================================================================================
+                    STEP 2: SETUP NODE.JS PROJECT (2 min)
+================================================================================
+
+1. Create folder: C:\Users\YourName\Documents\scale-ticket-backend
+
+2. Download all Phase 1 files and put in that folder
+   Keep this structure:
+   - src\ (folder with all code)
+   - package.json
+   - .env.example
+   - 01_schema.sql
+   - *.md files
+
+3. Open PowerShell in that folder
+   (Shift + Right-click → "Open PowerShell window here")
+
+4. Install dependencies:
+   npm install
+
+5. Create .env file:
+   Copy-Item .env.example .env
+   notepad .env
+   
+   Edit and save:
+   DB_PASSWORD=your_postgresql_password_here
+
+✅ Project setup complete!
+
+================================================================================
+                    STEP 3: START SERVER (1 min)
+================================================================================
+
+In PowerShell in your project folder:
+
+  npm run dev
+
+You should see:
+  🚀 Scale Ticket API running on port 3000
+  📝 Environment: development
+
+✅ Server running!
+
+================================================================================
+                    STEP 4: TEST IT WORKS (1 min)
+================================================================================
+
+Open NEW PowerShell window (don't close the one running server):
+
+  curl http://localhost:3000/health
+
+Should return:
+  {"status": "API is running", "timestamp": "..."}
+
+Test API:
+  curl http://localhost:3000/api/customers
+
+Should return your seed data (3 customers)
+
+✅ Backend is working!
+
+================================================================================
+                        WHAT'S NEXT?
+================================================================================
+
+READ IN THIS ORDER:
+
+1. ✅ WINDOWS_SETUP_GUIDE.md (you are here)
+2. → NEXT_STEPS.md (what to build each day)
+3. → PHASE_1_IMPLEMENTATION_PLAN.md (technical details)
+
+Then start building:
+  Day 1: Build 4 simple controllers
+  Day 2-3: Build ticket controller
+  Day 4-5: Build Angular frontend
+  Day 6: Print templates + polish
+
+================================================================================
+                      USEFUL POWERSHELL COMMANDS
+================================================================================
+
+Navigate to project:
+  cd C:\Users\YourName\Documents\scale-ticket-backend
+
+List files:
+  ls
+
+Stop server:
+  Ctrl + C
+
+Restart server:
+  Ctrl + C
+  npm run dev
+
+Open VS Code:
+  code .
+
+View .env file:
+  Get-Content .env
+
+Edit .env:
+  notepad .env
+
+Test endpoints (after server running):
+  curl http://localhost:3000/health
+  curl http://localhost:3000/api/customers
+  curl http://localhost:3000/api/products
+
+===============================================================================
+                      IF SOMETHING GOES WRONG
+===============================================================================
+
+Error: "npm: The term 'npm' is not recognized"
+→ Reinstall Node.js (make sure "Add to PATH" is checked)
+
+Error: "Cannot find module 'pg'"
+→ Run: npm install
+
+Error: "Database connection failed"
+→ Check .env file has correct password
+→ Test with: psql -U postgres -d scale_tickets -c "SELECT NOW();"
+
+Error: "Port 3000 already in use"
+→ Change PORT in .env to 3001
+→ Or: netstat -ano | findstr :3000
+→ Then: taskkill /PID <number> /F
+
+===============================================================================
+                    USE POSTMAN FOR EASIER TESTING
+===============================================================================
+
+Instead of curl commands, use Postman (GUI):
+  1. Download: https://www.postman.com/downloads/
+  2. Create GET request to: http://localhost:3000/api/customers
+  3. Click Send
+  4. Much easier than PowerShell commands!
+
+===============================================================================
+                        YOU'RE READY! 🚀
+===============================================================================
+
+Next: Read NEXT_STEPS.md for day-by-day what to build.
+
+Questions? Check PHASE_1_CHECKLIST.md for troubleshooting.
+
+Good luck!
