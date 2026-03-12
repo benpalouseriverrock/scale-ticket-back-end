@@ -6,22 +6,25 @@ const haulhubService = require('../services/haulhubService');
 
 const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
   try {
-    // per_ton / per_load: inputValue IS the rate — no DB lookup needed
-    if (method === 'per_ton') {
-      const rate = parseFloat(inputValue) || 0;
-      return parseFloat((rate * tons).toFixed(2));
-    }
+    // per_load: inputValue IS the flat charge — no DB lookup needed
     if (method === 'per_load') {
       return parseFloat(parseFloat(inputValue || 0).toFixed(2));
     }
 
-    // location / mileage: look up rate from delivery_rates table
+    // per_ton: inputValue IS the rate — multiply by tons
+    if (method === 'per_ton') {
+      const rate = parseFloat(inputValue) || 0;
+      return parseFloat((rate * tons).toFixed(2));
+    }
+
+    // ⭐ CORRECTED: Both methods query flat_rate column (rate_per_mile is NULL in database!)
     const query = `
       SELECT flat_rate, minimum_charge
       FROM delivery_rates
       WHERE method = $1 AND input_value = $2 AND active = TRUE
       LIMIT 1
     `;
+
     const result = await db.query(query, [method, inputValue]);
     if (result.rows.length === 0) return 0;
 
@@ -29,10 +32,13 @@ const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
     let charge = 0;
 
     if (method === 'location') {
-      // flat_rate contains $/ton rate — multiply by net tons
+      // ⭐ CRITICAL: flat_rate contains $/ton rate - MUST multiply by tons!
+      // Example: Colfax = $6.5/ton, for 10 tons = 10 × $6.5 = $65
       charge = (row.flat_rate || 0) * tons;
+
     } else if (method === 'mileage') {
-      // flat_rate contains rate for this mileage range — use directly
+      // ⭐ CRITICAL: flat_rate contains rate for this mileage range - use directly
+      // Example: 11-15 miles = $3.25 (don't multiply by tons)
       charge = row.flat_rate || 0;
     } else {
       return 0;

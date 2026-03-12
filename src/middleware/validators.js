@@ -215,8 +215,8 @@ const validateCreateTicket = [
   // Delivery method validation
   body('delivery_method')
     .optional()
-    .isIn(['location', 'mileage']).withMessage('Delivery method must be location or mileage'),
-  
+    .isIn(['location', 'mileage', 'per_load', 'per_ton']).withMessage('Delivery method must be location, mileage, per_load, or per_ton'),
+
   body('delivery_input_value')
     .optional()
     .trim()
@@ -224,11 +224,14 @@ const validateCreateTicket = [
     .notEmpty().withMessage('Delivery input required when delivery method specified')
     .custom(async (value, { req }) => {
       if (!value || !req.body.delivery_method) return true;
-      
-      // Validate delivery method has matching rate
-      const method = req.body.delivery_method;
-      const query = 'SELECT delivery_rate_id FROM delivery_rates WHERE method = $1 AND input_value = $2';
 
+      const method = req.body.delivery_method;
+
+      // per_load and per_ton use the input value as the rate directly — no DB lookup needed
+      if (method === 'per_load' || method === 'per_ton') return true;
+
+      // Validate delivery method has matching rate
+      const query = 'SELECT delivery_rate_id FROM delivery_rates WHERE method = $1 AND input_value = $2';
       const result = await db.query(query, [method, value]);
       if (result.rows.length === 0) {
         throw new Error(`Delivery ${method} "${value}" does not exist in rates`);
