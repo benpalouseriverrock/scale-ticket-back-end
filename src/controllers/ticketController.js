@@ -163,12 +163,12 @@ exports.createTicket = async (req, res) => {
       is_wsdot_ticket, dot_code, contract_number, job_number, mix_id,
       phase_code, phase_description, dispatch_number, purchase_order_number,
       weighmaster, comments,
-      manual_tare_override
+      manual_tare_override, manual_customer_name
     } = req.body;
 
     // ✅ VALIDATION: Check required fields
-    if (!customer_id || !product_id || !truck_id) {
-      return res.status(400).json({ error: 'Missing required fields: customer, product, truck' });
+    if ((!customer_id && !manual_customer_name) || !product_id || !truck_id) {
+      return res.status(400).json({ error: 'Missing required fields: customer (or manual name), product, truck' });
     }
 
     // ✅ VALIDATION: Check weight fields
@@ -232,7 +232,7 @@ exports.createTicket = async (req, res) => {
       : 0;
 
     // ✅ STEP 6: Calculate tax
-    const taxRate = await getTaxRate(customer_id);
+    const taxRate = customer_id ? await getTaxRate(customer_id) : 7.9;
     const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
     const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     
@@ -267,16 +267,16 @@ exports.createTicket = async (req, res) => {
         subtotal, tax_rate, tax_amount, cc_fee, total,
         is_wsdot_ticket, dot_code, contract_number, job_number, mix_id, phase_code,
         phase_description, dispatch_number, purchase_order_number, weighmaster,
-        loads_today, quantity_shipped_today, comments
+        loads_today, quantity_shipped_today, comments, manual_customer_name
       ) VALUES (
         $1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
         $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-        $30, $31, $32, $33, $34, $35, $36
+        $30, $31, $32, $33, $34, $35, $36, $37
       ) RETURNING *
     `;
 
     const values = [
-      ticketNumber, customer_id, product_id, truck_id, trailer_id || null,
+      ticketNumber, customer_id || null, product_id, truck_id, trailer_id || null,
       job_name || null, delivered_by || null, delivery_unit || null, delivery_location || null,
       truckWeightLbs, pupWeightLbs, grossWeightLbs, totalTare, netWeightLbs, netWeightTons,
       deliveryCharge, delivery_method || null, delivery_input_value || null,
@@ -284,7 +284,7 @@ exports.createTicket = async (req, res) => {
       is_wsdot_ticket || false, dot_code || null, contract_number || null, job_number || null,
       mix_id || null, phase_code || null, phase_description || null, dispatch_number || null,
       purchase_order_number || null, weighmaster || null, loadsToday, quantityShippedToday,
-      comments || null
+      comments || null, manual_customer_name || null
     ];
 
     const result = await db.query(query, values);
@@ -332,7 +332,7 @@ exports.updateTicket = async (req, res) => {
       is_wsdot_ticket, dot_code, contract_number, job_number, mix_id,
       phase_code, phase_description, dispatch_number, purchase_order_number,
       weighmaster, comments,
-      manual_tare_override
+      manual_tare_override, manual_customer_name
     } = req.body;
 
     // Verify ticket exists
@@ -396,7 +396,7 @@ exports.updateTicket = async (req, res) => {
       : 0;
 
     // Calculate tax
-    const taxRate = await getTaxRate(effectiveCustomerId);
+    const taxRate = effectiveCustomerId ? await getTaxRate(effectiveCustomerId) : 7.9;
     const subtotal = parseFloat((materialCost + deliveryCharge).toFixed(2));
     const taxAmount = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
 
@@ -415,13 +415,14 @@ exports.updateTicket = async (req, res) => {
         job_name = $20, delivered_by = $21, delivery_unit = $22, delivery_location = $23,
         is_wsdot_ticket = $24, dot_code = $25, contract_number = $26, job_number = $27,
         mix_id = $28, phase_code = $29, phase_description = $30, dispatch_number = $31,
-        purchase_order_number = $32, weighmaster = $33, comments = $34
+        purchase_order_number = $32, weighmaster = $33, comments = $34,
+        manual_customer_name = $35
       WHERE ticket_id = $1 RETURNING *
     `;
 
     const values = [
       id,
-      effectiveCustomerId, effectiveProductId, effectiveTruckId, effectiveTrailerId || null,
+      effectiveCustomerId || null, effectiveProductId, effectiveTruckId, effectiveTrailerId || null,
       truckWeightLbs, pupWeightLbs, grossWeightLbs,
       totalTare, netWeightLbs, netWeightTons,
       deliveryCharge, effectiveDeliveryMethod || null, effectiveDeliveryInputValue || null,
@@ -440,7 +441,8 @@ exports.updateTicket = async (req, res) => {
       dispatch_number !== undefined ? dispatch_number : ticket.dispatch_number,
       purchase_order_number !== undefined ? purchase_order_number : ticket.purchase_order_number,
       weighmaster !== undefined ? weighmaster : ticket.weighmaster,
-      comments !== undefined ? comments : ticket.comments
+      comments !== undefined ? comments : ticket.comments,
+      manual_customer_name !== undefined ? manual_customer_name : ticket.manual_customer_name
     ];
 
     const result = await db.query(query, values);

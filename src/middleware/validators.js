@@ -165,14 +165,23 @@ const validateUpdateTareWeight = [
 const validateCreateTicket = [
   // Required fields
   body('customer_id')
-    .notEmpty().withMessage('Customer ID is required')
+    .optional({ nullable: true })
     .isInt({ min: 1 }).withMessage('Customer ID must be a positive integer')
-    .custom(async (value) => {
+    .custom(async (value, { req }) => {
+      if (!value && !req.body.manual_customer_name) {
+        throw new Error('Either customer_id or manual_customer_name is required');
+      }
+      if (!value) return true;
       const result = await db.query('SELECT customer_id FROM customers WHERE customer_id = $1', [value]);
       if (result.rows.length === 0) {
         throw new Error('Customer ID does not exist');
       }
     }),
+
+  body('manual_customer_name')
+    .optional()
+    .trim()
+    .isLength({ max: 255 }).withMessage('Manual customer name must be max 255 characters'),
   
   body('product_id')
     .notEmpty().withMessage('Product ID is required')

@@ -44,6 +44,25 @@ exports.updateTrailer = async (req, res) => {
   }
 };
 
+exports.updateTrailerTare = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tare_weight } = req.body;
+    if (!tare_weight || isNaN(tare_weight)) {
+      return res.status(400).json({ error: 'Valid tare weight is required' });
+    }
+    const result = await db.query(
+      `UPDATE trailers SET tare_weight = $2, last_updated = NOW() WHERE trailer_id = $1 RETURNING *`,
+      [id, tare_weight]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Trailer not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating trailer tare:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.deleteTrailer = async (req, res) => {
   try {
     const result = await db.query('DELETE FROM trailers WHERE trailer_id = $1 RETURNING *', [req.params.id]);
