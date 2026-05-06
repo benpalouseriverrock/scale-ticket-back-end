@@ -165,7 +165,7 @@ const validateUpdateTareWeight = [
 const validateCreateTicket = [
   // Required fields
   body('customer_id')
-    .optional({ nullable: true })
+    .optional({ nullable: true, checkFalsy: true })
     .isInt({ min: 1 }).withMessage('Customer ID must be a positive integer')
     .custom(async (value, { req }) => {
       if (!value && !req.body.manual_customer_name) {
@@ -179,7 +179,7 @@ const validateCreateTicket = [
     }),
 
   body('manual_customer_name')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .trim()
     .isLength({ max: 255 }).withMessage('Manual customer name must be max 255 characters'),
   
@@ -205,7 +205,7 @@ const validateCreateTicket = [
   
   // Optional trailer
   body('trailer_id')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isInt({ min: 1 }).withMessage('Trailer ID must be a positive integer')
     .custom(async (value) => {
       if (!value) return true;
@@ -227,9 +227,9 @@ const validateCreateTicket = [
     .isIn(['location', 'mileage', 'per_load', 'per_ton']).withMessage('Delivery method must be location, mileage, per_load, or per_ton'),
 
   body('delivery_input_value')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .trim()
-    .if(() => body('delivery_method').notEmpty())
+    .if((value, { req }) => !!req.body.delivery_method)
     .notEmpty().withMessage('Delivery input required when delivery method specified')
     .custom(async (value, { req }) => {
       if (!value || !req.body.delivery_method) return true;

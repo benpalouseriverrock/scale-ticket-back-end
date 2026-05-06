@@ -4,6 +4,11 @@
 const db = require('../config/database');
 const haulhubService = require('../services/haulhubService');
 
+const isMissingManualCustomerColumnError = (error) => {
+  if (!error) return false;
+  return error.code === '42703' && String(error.message || '').includes('manual_customer_name');
+};
+
 const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
   try {
     // per_load: inputValue IS the flat charge — no DB lookup needed
@@ -287,7 +292,34 @@ exports.createTicket = async (req, res) => {
       comments || null, manual_customer_name || null
     ];
 
-    const result = await db.query(query, values);
+    let result;
+    try {
+      result = await db.query(query, values);
+    } catch (error) {
+      // Fallback for databases where manual_customer_name migration has not been applied yet.
+      if (!isMissingManualCustomerColumnError(error)) {
+        throw error;
+      }
+
+      const fallbackQuery = `
+        INSERT INTO tickets (
+          ticket_number, date_time, customer_id, product_id, truck_id, trailer_id,
+          job_name, delivered_by, delivery_unit, delivery_location,
+          truck_weight, pup_weight, gross_weight, tare_weight, net_weight, net_tons,
+          delivery_charge, delivery_method, delivery_input_value,
+          subtotal, tax_rate, tax_amount, cc_fee, total,
+          is_wsdot_ticket, dot_code, contract_number, job_number, mix_id, phase_code,
+          phase_description, dispatch_number, purchase_order_number, weighmaster,
+          loads_today, quantity_shipped_today, comments
+        ) VALUES (
+          $1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+          $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
+          $30, $31, $32, $33, $34, $35, $36
+        ) RETURNING *
+      `;
+      const fallbackValues = values.slice(0, 36);
+      result = await db.query(fallbackQuery, fallbackValues);
+    }
     const createdTicket = result.rows[0];
 
     // Push to HaulHub if integration is enabled and this is a WSDOT ticket
@@ -445,7 +477,31 @@ exports.updateTicket = async (req, res) => {
       manual_customer_name !== undefined ? manual_customer_name : ticket.manual_customer_name
     ];
 
-    const result = await db.query(query, values);
+    let result;
+    try {
+      result = await db.query(query, values);
+    } catch (error) {
+      // Fallback for databases where manual_customer_name migration has not been applied yet.
+      if (!isMissingManualCustomerColumnError(error)) {
+        throw error;
+      }
+
+      const fallbackQuery = `
+        UPDATE tickets SET
+          customer_id = $2, product_id = $3, truck_id = $4, trailer_id = $5,
+          truck_weight = $6, pup_weight = $7, gross_weight = $8,
+          tare_weight = $9, net_weight = $10, net_tons = $11,
+          delivery_charge = $12, delivery_method = $13, delivery_input_value = $14,
+          subtotal = $15, tax_rate = $16, tax_amount = $17, cc_fee = $18, total = $19,
+          job_name = $20, delivered_by = $21, delivery_unit = $22, delivery_location = $23,
+          is_wsdot_ticket = $24, dot_code = $25, contract_number = $26, job_number = $27,
+          mix_id = $28, phase_code = $29, phase_description = $30, dispatch_number = $31,
+          purchase_order_number = $32, weighmaster = $33, comments = $34
+        WHERE ticket_id = $1 RETURNING *
+      `;
+      const fallbackValues = values.slice(0, 34);
+      result = await db.query(fallbackQuery, fallbackValues);
+    }
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating ticket:', error);
