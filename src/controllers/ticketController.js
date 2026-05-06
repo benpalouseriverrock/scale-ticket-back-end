@@ -9,6 +9,20 @@ const isMissingManualCustomerColumnError = (error) => {
   return error.code === '42703' && String(error.message || '').includes('manual_customer_name');
 };
 
+const getMissingWsdotFields = (ticketLike) => {
+  if (!ticketLike || !ticketLike.is_wsdot_ticket) return [];
+
+  const requiredFields = [
+    ['dot_code', 'DOT code'],
+    ['contract_number', 'contract number'],
+    ['job_number', 'job number'],
+  ];
+
+  return requiredFields
+    .filter(([key]) => !String(ticketLike[key] || '').trim())
+    .map(([, label]) => label);
+};
+
 const calculateDeliveryCharge = async (method, inputValue, tons = 1) => {
   try {
     // per_load: inputValue IS the flat charge — no DB lookup needed
@@ -179,6 +193,19 @@ exports.createTicket = async (req, res) => {
     // ✅ VALIDATION: Check weight fields
     if (!truck_weight || truck_weight <= 0) {
       return res.status(400).json({ error: 'Truck weight is required and must be greater than 0' });
+    }
+
+    const missingWsdotFields = getMissingWsdotFields({
+      is_wsdot_ticket,
+      dot_code,
+      contract_number,
+      job_number,
+    });
+
+    if (missingWsdotFields.length > 0) {
+      return res.status(400).json({
+        error: `WSDOT tickets require ${missingWsdotFields.join(', ')}`,
+      });
     }
 
     // ✅ STEP 1: Calculate gross weight from split weights
@@ -376,6 +403,23 @@ exports.updateTicket = async (req, res) => {
     const effectiveProductId = product_id || ticket.product_id;
     const effectiveTruckId = truck_id || ticket.truck_id;
     const effectiveTrailerId = trailer_id !== undefined ? trailer_id : ticket.trailer_id;
+    const effectiveIsWsdotTicket = is_wsdot_ticket !== undefined ? is_wsdot_ticket : ticket.is_wsdot_ticket;
+    const effectiveDotCode = dot_code !== undefined ? dot_code : ticket.dot_code;
+    const effectiveContractNumber = contract_number !== undefined ? contract_number : ticket.contract_number;
+    const effectiveJobNumber = job_number !== undefined ? job_number : ticket.job_number;
+
+    const missingWsdotFields = getMissingWsdotFields({
+      is_wsdot_ticket: effectiveIsWsdotTicket,
+      dot_code: effectiveDotCode,
+      contract_number: effectiveContractNumber,
+      job_number: effectiveJobNumber,
+    });
+
+    if (missingWsdotFields.length > 0) {
+      return res.status(400).json({
+        error: `WSDOT tickets require ${missingWsdotFields.join(', ')}`,
+      });
+    }
 
     // ✅ Calculate gross from split weights (use provided values or existing)
     const truckWeightLbs = truck_weight !== undefined ? parseFloat(truck_weight) : parseFloat(ticket.truck_weight);
@@ -599,6 +643,13 @@ exports.pushToHaulHub = async (req, res) => {
     }
 
     const ticket = ticketResult.rows[0];
+    const missingWsdotFields = getMissingWsdotFields(ticket);
+    if (missingWsdotFields.length > 0) {
+      return res.status(400).json({
+        error: `WSDOT ticket is missing required fields for HaulHub: ${missingWsdotFields.join(', ')}`,
+      });
+    }
+
     const response = await pushTicketToHaulHub(ticket);
 
     // Re-fetch to get the updated haulhub fields
